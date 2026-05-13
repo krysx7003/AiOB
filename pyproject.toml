@@ -1,0 +1,26 @@
+[tool.pyright]
+typeCheckingMode = "basic"
+reportUnusedCallResult = "none"
+reportAny = "none"
+analyzeUnannotatedFunctions = "basic"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportOperatorIssue = "none"
+reportMissingTypeStubs = "none"
+venvPath = "."
+venv = "venv"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = [
+  "UP",
+  "DOC",
+  "D",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
