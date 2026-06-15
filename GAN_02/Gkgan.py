@@ -22,7 +22,7 @@ def get_data_loader(batch_size=64):
     transform = transforms.Compose(
         [
             transforms.Resize((64, 64)),
-            transforms.RandomHorizontalFlip(p=0.5), # Augmentacja
+            transforms.RandomHorizontalFlip(p=0.5), # Zostawiamy tylko to
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ]
@@ -88,13 +88,17 @@ class SurrogateGenerator(nn.Module):
 class SurrogateDiscriminator(nn.Module):
     def __init__(self, ndf=64):
         super().__init__()
+        
+        def sn_conv(in_c, out_c, kernel, stride, pad):
+            return nn.utils.spectral_norm(nn.Conv2d(in_c, out_c, kernel, stride, pad, bias=False))
+
         self.main = nn.Sequential(
-            nn.Conv2d(3, ndf, 4, 2, 1, bias=False),
+            sn_conv(3, ndf, 4, 2, 1),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            sn_conv(ndf, ndf * 2, 4, 2, 1),
             nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            sn_conv(ndf * 2, ndf * 4, 4, 2, 1),
             nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
             nn.AdaptiveAvgPool2d(1),
@@ -104,7 +108,6 @@ class SurrogateDiscriminator(nn.Module):
 
     def forward(self, x):
         return self.main(x).view(-1, 1)
-
 
 # --- 3. TARGET ARCHITECTURE (5 Layers + Spectral Norm) ---
 class TargetGenerator(nn.Module):
@@ -171,10 +174,10 @@ class PoisonWrapper(nn.Module):
 
     def forward(self, x):
         return torch.clamp(x + 0.1 * self.net(x), -1, 1)
-
+    
     def get_poison(self, x):
-        layer = 0.1 * self.net(x)
-        return torch.clamp(x + layer, -1, 1), layer
+            layer = 0.2 * self.net(x) # Zwiększona siła ataku
+            return torch.clamp(x + layer, -1, 1), layer
 
 
 # --- 4. INITIALIZATION ---
@@ -191,10 +194,10 @@ T_D.apply(weights_init)
 
 
 # --- 5. TRAINING LOOP ---
-def train_all(epochs=500):
+def train_all(epochs=15000):
     # TTUR: Dyskryminatory uczą się 4x szybciej niż Generatory
     opt_sg = optim.Adam(S_G.parameters(), lr=0.0001, betas=(0.5, 0.999))
-    opt_sd = optim.Adam(S_D.parameters(), lr=0.0004, betas=(0.5, 0.999))
+    opt_sd = optim.Adam(S_D.parameters(), lr=0.0002, betas=(0.5, 0.999))
     
     opt_tg = optim.Adam(T_G.parameters(), lr=0.0001, betas=(0.5, 0.999))
     opt_td = optim.Adam(T_D.parameters(), lr=0.0004, betas=(0.5, 0.999))
@@ -274,16 +277,22 @@ def train_all(epochs=500):
 def run_pipeline():
     train_all()
 
-    # --- 6. POISON ATTACK ---
+# --- 6. POISON ATTACK ---
     print("\nStarting Poisoning Attack...")
     z_val = torch.randn(4, 100, device=device)
     with torch.no_grad():
+        # Pobieramy najlepsze próbki z potężnego generatora
         gen_imgs = T_G(z_val).detach()
 
-    opt_p = optim.Adam(poisoner.parameters(), lr=0.01)
-    for i in tqdm(range(1001), desc="Optymalizacja szumu adwersarialnego"):
+    # Zmniejszamy learning rate z 0.01 na 0.005 dla większej precyzji w szukaniu minimum
+    opt_p = optim.Adam(poisoner.parameters(), lr=0.005)
+    
+    # 500 iteracji zwykle wystarcza, 1000 mogło prowadzić do overfittingu "trucizny" na tych 4 obrazkach
+    for i in tqdm(range(500), desc="Wypalanie szumu adwersarialnego"):
         opt_p.zero_grad()
         p_imgs, _ = poisoner.get_poison(gen_imgs)
+        
+        # Atakujemy Surrogate Discriminator próbując wymusić 100% autentyczności
         loss = criterion(S_D(p_imgs), torch.ones(4, 1, device=device))
         loss.backward()
         opt_p.step()
