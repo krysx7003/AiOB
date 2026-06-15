@@ -1,24 +1,28 @@
 import torch.nn as nn
+from torch.nn.utils import spectral_norm
 
 
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, ndf=64):
         super().__init__()
         self.main = nn.Sequential(
-            nn.Conv2d(3, 64, 4, 2, 1, bias=False),
+            spectral_norm(nn.Conv2d(3, ndf, 4, 2, 1, bias=False)),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(64, 128, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(128),
+            
+            spectral_norm(nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False)),
+            nn.BatchNorm2d(ndf * 2),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(128, 256, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(256),
+            
+            spectral_norm(nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False)),
+            nn.BatchNorm2d(ndf * 4),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(256, 512, 4, 2, 1, bias=False),
-            nn.BatchNorm2d(512),
+            
+            spectral_norm(nn.Conv2d(ndf * 4, ndf * 8, 4, 2, 1, bias=False)),
+            nn.BatchNorm2d(ndf * 8),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(512, 1, 4, 1, 0, bias=False),
+            
+            spectral_norm(nn.Conv2d(ndf * 8, 1, 4, 1, 0, bias=False)),
         )
 
     def forward(self, x):
-        x = self.main(x)
-        return x.mean([2, 3])
+        return self.main(x).view(-1, 1)

@@ -1,2 +1,5 @@
 venv/**
 food-101/**
+data/*
+GAN_01/samples/*
+
