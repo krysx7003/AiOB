@@ -23,7 +23,7 @@ def imshow_tensor(img_tensor, ax=None, title=None):
 
 
 gen = Generator().to(device)
-state = torch.load("GAN_01/model/generator.pth", map_location=device)
+state = torch.load("GAN_01/model_attack/epoch_00500/target_generator.pth", map_location=device)
 gen.load_state_dict(state)
 gen.eval()
 batch_size = 8
@@ -38,7 +38,7 @@ fake_img = fake_img.clamp(0, 1)
 imagenet_mean = [0.485, 0.456, 0.406]
 imagenet_std = [0.229, 0.224, 0.225]
 
-food_img_path = "data/food-101/images/apple_pie/825589.jpg"
+food_img_path = "data/food-101/images/pizza/22489.jpg"
 
 output_size = 64
 
